@@ -1,31 +1,42 @@
+
 import os
 import requests
 import streamlit as st
 import google.generativeai as genai
-import json
 
-# ---------------------------
-#  SET YOUR FREE GOOGLE API KEY
-# ---------------------------
-GEMINI_API_KEY = "AIzaSyCnMXLuHSSWDoFk4B9peXoyWpZqpy9K7MA"
-OPENTRIPMAP_API_KEY = "5ae2e3f221c38a28845f05b6"   # Free Demo Key (public)
+# ---------------------------------------------
+#  LOAD GOOGLE GEMINI API KEY (from Streamlit Secrets)
+# ---------------------------------------------
+GEMINI_API_KEY = os.environ.get("AIzaSyCnMXLuHSSWDoFk4B9peXoyWpZqpy9K7MA")
+
+if not GEMINI_API_KEY:
+    st.error("❌ ERROR: GEMINI_API_KEY is not set in Streamlit Secrets!")
+    st.stop()
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-st.set_page_config(page_title="Free AI Travel Chatbot", layout="wide")
+# ---------------------------------------------
+#   STREAMLIT UI
+# ---------------------------------------------
+st.set_page_config(page_title="🌍 AI Travel Chatbot", layout="wide")
 st.title("🌍 Free AI Travel Chatbot (Gemini + Free APIs)")
 
-# ---------------------------
-#  GEO + POIs (OPEN TRIP MAP)
-# ---------------------------
+# FREE OpenTripMap API (public demo key)
+OPENTRIPMAP_API_KEY = "5ae2e3f221c38a28845f05b6"
 
+# ---------------------------------------------
+# GEO LOCATION API
+# ---------------------------------------------
 def geocode(city):
     url = "https://api.opentripmap.com/0.1/en/places/geoname"
     params = {"name": city, "apikey": OPENTRIPMAP_API_KEY}
     r = requests.get(url, params=params).json()
     return r
 
-def get_pois(lat, lon, limit=5):
+# ---------------------------------------------
+# GET TOP ATTRACTIONS
+# ---------------------------------------------
+def get_pois(lat, lon, limit=7):
     url = "https://api.opentripmap.com/0.1/en/places/radius"
     params = {
         "radius": 5000,
@@ -35,6 +46,7 @@ def get_pois(lat, lon, limit=5):
         "apikey": OPENTRIPMAP_API_KEY
     }
     data = requests.get(url, params=params).json()
+
     places = []
     for item in data.get("features", []):
         name = item["properties"].get("name")
@@ -42,28 +54,29 @@ def get_pois(lat, lon, limit=5):
             places.append(name)
     return places
 
-# ---------------------------
-#  GEMINI AI TRAVEL PLANNER
-# ---------------------------
-
+# ---------------------------------------------
+#  AI TRAVEL ITINERARY GENERATION (Gemini)
+# ---------------------------------------------
 def generate_itinerary(city, days, budget, poi_list):
+    poi_text = ", ".join(poi_list)
+
     prompt = f"""
-You are an expert travel planner. Create a detailed travel plan.
+Create a detailed travel plan.
 
 City: {city}
 Days: {days}
 Budget: {budget}
-Places of interest: {poi_list}
+Popular attractions: {poi_text}
 
 Return:
-1) Day-by-day itinerary
-2) Recommended places to visit
-3) Hotels (budget-friendly)
-4) Food recommendations
-5) Total budget estimate
-6) Best season to visit
-7) Travel tips
-    """
+1. Day-by-day itinerary
+2. Best places to visit
+3. Budget-friendly hotels
+4. Food recommendations
+5. Total budget estimate
+6. Best travel season
+7. Safety + local travel tips
+"""
 
     model = genai.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(prompt)
@@ -71,36 +84,40 @@ Return:
     return response.text
 
 
-# ---------------------------
-#   UI FORM
-# ---------------------------
-
-with st.form("travel"):
-    city = st.text_input("Destination City", "Dubai")
-    days = st.number_input("How many days?", 1, 10, 3)
-    budget = st.text_input("Budget (e.g., USD 500)", "USD 400")
+# ---------------------------------------------
+#  USER INPUT FORM
+# ---------------------------------------------
+with st.form("travel_form"):
+    city = st.text_input("Enter Destination City", "Dubai")
+    days = st.slider("Number of Days", 1, 10, 3)
+    budget = st.text_input("Your Budget (e.g., 300 USD)", "400 USD")
     submit = st.form_submit_button("Generate Travel Plan")
 
+# ---------------------------------------------
+#  RUNNING THE BOT
+# ---------------------------------------------
 if submit:
-    st.info("Fetching location...")
+    st.info("📍 Finding city location...")
 
     geo = geocode(city)
     if "lat" not in geo:
-        st.error("City not found! Try another city.")
+        st.error("❌ City not found! Try another name.")
         st.stop()
 
     lat, lon = geo["lat"], geo["lon"]
+    st.success(f"City found: {city} (Lat: {lat}, Lon: {lon})")
 
-    st.success(f"Found location: {city} (Lat: {lat}, Lon: {lon})")
-
-    st.info("Finding top attractions...")
+    st.info("🏙 Finding popular attractions near the location...")
     pois = get_pois(lat, lon)
 
-    st.write("Top attractions found:", pois)
+    if len(pois) == 0:
+        st.warning("⚠ No attractions found. Still generating AI plan.")
+    else:
+        st.write("Top attractions:", pois)
 
-    st.info("Generating AI travel plan using FREE Gemini API...")
-
-    result = generate_itinerary(city, days, budget, pois)
+    st.info("🤖 Generating travel plan using FREE Google Gemini API...")
+    plan = generate_itinerary(city, days, budget, pois)
 
     st.subheader("✨ Your AI Travel Plan")
-    st.write(result)
+    st.write(plan)
+
