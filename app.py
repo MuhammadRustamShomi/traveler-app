@@ -1,101 +1,93 @@
-import os
-import requests
 import streamlit as st
+import requests
 
-# ============= API KEY =====================
-GEMINI_API_KEY = os.environ.get("AIzaSyCnMXLuHSSWDoFk4B9peXoyWpZqpy9K7MA")
+st.set_page_config(page_title="AI Travel Chatbot", page_icon="🌍")
 
-if not GEMINI_API_KEY:
-    st.error("❌ ERROR: GEMINI_API_KEY not found in Streamlit Secrets!")
-    st.stop()
+st.title("🌍 Simple AI Travel Chatbot (FREE APIs, No AI Key Needed)")
 
-# ============= Gemini REST API ==============
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + GEMINI_API_KEY
-
-# ============= OpenTripMap API (Free) ========
-OPENTRIPMAP_API_KEY = "5ae2e3f221c38a28845f05b6"
-
-
-def geocode(city):
-    url = "https://api.opentripmap.com/0.1/en/places/geoname"
-    params = {"name": city, "apikey": OPENTRIPMAP_API_KEY}
-    return requests.get(url, params=params).json()
-
-
-def get_pois(lat, lon, limit=5):
-    url = "https://api.opentripmap.com/0.1/en/places/radius"
-    params = {
-        "radius": 5000,
-        "lon": lon,
-        "lat": lat,
-        "limit": limit,
-        "apikey": OPENTRIPMAP_API_KEY
-    }
-    data = requests.get(url, params=params).json()
-    places = []
-
-    for item in data.get("features", []):
-        name = item["properties"].get("name")
-        if name:
-            places.append(name)
-
-    return places
-
-
-def generate_ai_response(prompt):
-    body = { "contents": [{ "parts": [{ "text": prompt }] }] }
-    response = requests.post(GEMINI_URL, json=body)
-
+# -------------------------------------------------------------------
+# FREE Public APIs (No Auth Required)
+# -------------------------------------------------------------------
+def get_wikipedia_summary(place):
     try:
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{place}"
+        res = requests.get(url).json()
+        return res.get("extract", "No info found.")
     except:
-        return "AI Error: Could not generate response."
+        return "Wikipedia info unavailable."
+
+def get_weather(place):
+    try:
+        url = f"https://wttr.in/{place}?format=3"
+        return requests.get(url).text
+    except:
+        return "Weather data unavailable."
+
+def get_hotels(place):
+    fake_hotels = [
+        "Hotel Grand Palace",
+        "City View Resort",
+        "Blue Orchid Inn",
+        "Comfort Stay Hotel",
+    ]
+    return fake_hotels
+
+def generate_itinerary(place, days):
+    return [
+        f"Day 1: Explore main city attractions of {place}.",
+        f"Day 2: Visit famous landmarks and local food streets.",
+        f"Day {days}: Shopping & relaxing before departure."
+    ]
 
 
-# -------------------- UI --------------------
-st.title("🌍 Simple Free AI Travel Chatbot")
+# -------------------------------------------------------------------
+# MAIN CHATBOT LOGIC
+# -------------------------------------------------------------------
+place = st.text_input("✈ Enter travel destination:")
 
-with st.form("form"):
-    city = st.text_input("Destination", "Dubai")
-    days = st.number_input("Days", 1, 10, 3)
-    budget = st.text_input("Budget", "300 USD")
-    btn = st.form_submit_button("Generate Travel Plan")
+days = st.number_input("🗓 Number of days:", min_value=1, max_value=30, value=3)
 
-if btn:
-    st.info("📍 Finding city...")
+budget = st.selectbox(
+    "💰 Budget range:",
+    ["Low", "Medium", "High"]
+)
 
-    geo = geocode(city)
-    if "lat" not in geo:
-        st.error("City not found!")
-        st.stop()
+if st.button("Generate Travel Plan"):
+    if place.strip() == "":
+        st.warning("Please enter a destination.")
+    else:
+        st.subheader(f"📝 Travel Plan for **{place}**")
 
-    lat, lon = geo["lat"], geo["lon"]
+        # Wikipedia info
+        st.write("### 📘 Destination Overview")
+        st.write(get_wikipedia_summary(place))
 
-    st.success(f"City found: {city}")
+        # Weather info
+        st.write("### 🌤 Current Weather")
+        st.write(get_weather(place))
 
-    st.info("🏙 Getting attractions...")
-    pois = get_pois(lat, lon)
-    st.write("Attractions:", pois)
+        # Hotels
+        st.write("### 🏨 Recommended Hotels")
+        hotels = get_hotels(place)
+        for h in hotels:
+            st.write("- " + h)
 
-    poi_text = ", ".join(pois)
+        # Itinerary
+        st.write("### 🗺 Suggested Itinerary")
+        itinerary = generate_itinerary(place, days)
+        for item in itinerary:
+            st.write("➡ " + item)
 
-    prompt = f"""
-Create a detailed travel plan for {city}.
+        # Travel Tips
+        st.write("### 💡 Travel Tips")
+        st.write("""
+- Keep your documents scanned online  
+- Carry a small medical kit  
+- Check weather before travel  
+- Explore local food & culture  
+""")
 
-Days: {days}
-Budget: {budget}
-Popular places: {poi_text}
 
-Include:
-- Day-wise itinerary
-- Budget-friendly hotels
-- Best season
-- Food places
-- Tips & warnings
-"""
+st.markdown("---")
+st.info("Made with ❤️ by Muhammad Rustam")
 
-    st.info("🤖 Generating travel plan...")
-    result = generate_ai_response(prompt)
-
-    st.subheader("✨ Travel Plan")
-    st.write(result)
