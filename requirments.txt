@@ -1,4 +1,7 @@
 streamlit==1.39.0
 requests==2.32.3
-google-generativeai==0.7.2
-protobuf==4.25.3
+google-generativeai==0.8.2
+protobuf==5.28.2
+google-ai-generativelanguage==0.6.10
+google-auth==2.32.0
+
